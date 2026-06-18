@@ -1,5 +1,5 @@
 import express from "express";
-import crytpo from "crypto";
+import crypto from "crypto";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -43,6 +43,11 @@ app.post(
       return res.status(401).send("Invalid signature");
     }
 
+    if (event !== "pull_request") {
+      console.log(`Ignored event: ${event}`);
+      return res.status(200).send("Ignored event");
+    }
+
     const payload = JSON.parse(body.toString("utf8"));
 
     console.log("Webhook verified");
@@ -54,6 +59,6 @@ app.post(
   },
 );
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
