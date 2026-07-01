@@ -2,6 +2,8 @@ import "dotenv/config";
 import express from "express";
 import crypto from "crypto";
 import { getInstallationOctokit } from "./github/auth.js";
+import { parsePatch } from "./github/diffParser.js";
+import { getPullRequestFiles } from "./github/pull.js";
 
 const app = express();
 
@@ -25,9 +27,9 @@ app.post(
       const event = req.headers["x-github-event"];
       const delivery = req.headers["x-github-delivery"];
 
-      console.log("Event:", event);
-      console.log("Delivery:", delivery);
-      console.log("Signature:", signature);
+      // console.log("Event:", event);
+      // console.log("Delivery:", delivery);
+      // console.log("Signature:", signature);
 
       const body = req.body;
 
@@ -55,9 +57,9 @@ app.post(
       const payload = JSON.parse(body.toString("utf8"));
 
       console.log("Webhook verified");
-      console.log("Action:", payload.action);
-      console.log("Repo:", payload.repository?.full_name);
-      console.log("PR number:", payload.pull_request?.number);
+      // console.log("Action:", payload.action);
+      // console.log("Repo:", payload.repository?.full_name);
+      // console.log("PR number:", payload.pull_request?.number);
 
       if (event !== "pull_request") {
         console.log(`Ignored event: ${event}`);
@@ -77,16 +79,31 @@ app.post(
       const repo = payload.repository.name;
       const pull_number = payload.pull_request.number;
 
-      const { data: files } = await octokit.rest.pulls.listFiles({
+      const action = payload.action;
+
+      if (!["opened", "synchronize", "reopened"].includes(action)) {
+        console.log(`Ignored pull_request action: ${action}`);
+        return res.status(200).send("Ignored pull_request action");
+      }
+
+      const files = await getPullRequestFiles(
+        octokit,
         owner,
         repo,
         pull_number,
-      });
+      );
 
       console.log(
         "Changed files:",
         files.map((file) => file.filename),
       );
+
+      const reviewChunks = files.flatMap((file) => {
+        return parsePatch(file.filename, file.patch);
+      });
+
+      console.log("Review chunks:");
+      console.dir(reviewChunks, { depth: null });
 
       return res.status(200).send("Webhook received");
     } catch (error) {
