@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { getInstallationOctokit } from "./github/auth.js";
 import { parsePatch } from "./github/diffParser.js";
 import { getPullRequestFiles } from "./github/pull.js";
+import { reviewChunks } from "./review/reviewEngine.js";
 
 const app = express();
 
@@ -77,7 +78,7 @@ app.post(
 
       const owner = payload.repository.owner.login;
       const repo = payload.repository.name;
-      const pull_number = payload.pull_request.number;
+      const pullNumber = payload.pull_request.number;
 
       const action = payload.action;
 
@@ -86,24 +87,24 @@ app.post(
         return res.status(200).send("Ignored pull_request action");
       }
 
-      const files = await getPullRequestFiles(
-        octokit,
-        owner,
-        repo,
-        pull_number,
-      );
+      const files = await getPullRequestFiles(octokit, owner, repo, pullNumber);
 
       console.log(
         "Changed files:",
         files.map((file) => file.filename),
       );
 
-      const reviewChunks = files.flatMap((file) => {
+      const chunks = files.flatMap((file) => {
         return parsePatch(file.filename, file.patch);
       });
 
       console.log("Review chunks:");
-      console.dir(reviewChunks, { depth: null });
+      console.dir(chunks, { depth: null });
+
+      const comments = reviewChunks(chunks);
+
+      console.log("Generated comments:");
+      console.dir(comments, { depth: null });
 
       return res.status(200).send("Webhook received");
     } catch (error) {
