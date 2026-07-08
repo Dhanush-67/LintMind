@@ -1,6 +1,20 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 
+// Your backend has the app's private key
+//         ↓
+// Backend creates a JWT
+//         ↓
+// GitHub checks the JWT and says:
+// "Okay, you are really this GitHub App"
+//         ↓
+// Backend asks GitHub:
+// "Give me a token for installation 123456"
+//         ↓
+// GitHub returns an installation access token
+//         ↓
+// Backend uses that token to fetch PR info / files / diffs / post comments
+
 const appId = Number(process.env.GITHUB_APP_ID);
 const privateKey = process.env.GITHUB_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
