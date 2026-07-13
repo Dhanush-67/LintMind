@@ -1,0 +1,46 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+model ReviewRun{
+  id String @id @default(cuid())
+  pullRequestNumber Int
+  pullRequestTitle String?
+  pullRequestAuthor String?
+  installationId Int
+  githubDeliveryId String?
+
+  status ReviewRunStatus @default(COMPLETED)
+  commentCount Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  comments ReviewComment[]
+}
+
+model ReviewComment {
+  id          String @id @default(cuid())
+
+  reviewRunId String
+  reviewRun   ReviewRun @relation(fields: [reviewRunId], references: [id], onDelete: Cascade)
+
+  filename String
+  line     Int
+  comment  String
+
+  createdAt DateTime @default(now())
+}
+
+enum ReviewRunStatus {
+  COMPLETED
+  FAILED
+}
