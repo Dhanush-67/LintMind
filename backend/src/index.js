@@ -5,6 +5,7 @@ import { getInstallationOctokit } from "./github/auth.js";
 import { parsePatch } from "./github/diffParser.js";
 import { getPullRequestFiles } from "./github/pull.js";
 import { reviewChunks } from "./review/reviewEngine.js";
+import { saveReviewRun } from "./review/saveReviewRun.js";
 
 const app = express();
 
@@ -106,6 +107,20 @@ app.post(
       console.log("Generated comments:");
       console.dir(comments, { depth: null });
 
+      const reviewRun = await saveReviewRun({
+        repositoryFullName: payload.repository.full_name,
+        pullRequestNumber: payload.pull_request.number,
+        pullRequestTitle: payload.pull_request.title,
+        pullRequestAuthor: payload.pull_request.user.login,
+        installationId: payload.installation.id,
+        githubDeliveryId: req.headers["x-github-delivery"],
+        comments,
+      });
+
+      console.log(
+        `Saved review run ${reviewRun.id} with ${reviewRun.commentCount} comments`,
+      );
+
       return res.status(200).send("Webhook received");
     } catch (error) {
       console.error("Webhook error:", error);
@@ -114,6 +129,12 @@ app.post(
   },
 );
 
-app.listen(port, () => {
+app.listen(port, (error) => {
+  if (error) {
+    console.error(`Failed to start server on port ${port}:`, error);
+    process.exitCode = 1;
+    return;
+  }
+
   console.log(`Server running on port ${port}`);
 });
