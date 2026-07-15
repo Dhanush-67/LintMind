@@ -6,6 +6,7 @@ import { parsePatch } from "./github/diffParser.js";
 import { getPullRequestFiles } from "./github/pull.js";
 import { reviewChunks } from "./review/reviewEngine.js";
 import { saveReviewRun } from "./review/saveReviewRun.js";
+import { postPullRequestReview } from "./github/postReview.js";
 
 const app = express();
 
@@ -80,6 +81,7 @@ app.post(
       const owner = payload.repository.owner.login;
       const repo = payload.repository.name;
       const pullNumber = payload.pull_request.number;
+      const commitId = payload.pull_request.head.sha;
 
       const action = payload.action;
 
@@ -120,6 +122,21 @@ app.post(
       console.log(
         `Saved review run ${reviewRun.id} with ${reviewRun.commentCount} comments`,
       );
+
+      const githubReview = await postPullRequestReview(
+        octokit,
+        owner,
+        repo,
+        pullNumber,
+        commitId,
+        comments,
+      );
+
+      if (githubReview) {
+        console.log(`Posted GitHub review ${githubReview.id}`);
+      } else {
+        console.log("No review posted because no comments were generated");
+      }
 
       return res.status(200).send("Webhook received");
     } catch (error) {
