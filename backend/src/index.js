@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { getInstallationOctokit } from "./github/auth.js";
 import { parsePatch } from "./github/diffParser.js";
 import { getPullRequestFiles } from "./github/pull.js";
-import { reviewChunks } from "./review/reviewEngine.js";
+import { reviewChunksWithAI } from "./review/aiReviewEngine.js";
 import { saveReviewRun } from "./review/saveReviewRun.js";
 import { postPullRequestReview } from "./github/postReview.js";
 
@@ -104,10 +104,18 @@ app.post(
       console.log("Review chunks:");
       console.dir(chunks, { depth: null });
 
-      const comments = reviewChunks(chunks);
+      const comments = await reviewChunksWithAI(chunks);
 
       console.log("Generated comments:");
       console.dir(comments, { depth: null });
+
+      //       PR opened
+      // → webhook verified
+      // → changed code parsed
+      // → GitHub Models reviews code
+      // → output parsed and validated
+      // → findings stored in PostgreSQL
+      // → inline GitHub feedback posted
 
       const reviewRun = await saveReviewRun({
         repositoryFullName: payload.repository.full_name,
