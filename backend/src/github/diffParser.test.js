@@ -24,4 +24,33 @@ describe("parsePatch", () => {
       },
     ]);
   });
+
+  test("increments for context lines but not deleted lines", () => {
+    const patch = `@@ -10,3 +10,3 @@
+ unchanged
+-oldValue
++newValue
+ end`;
+
+    const result = parsePatch("src/example.js", patch);
+
+    expect(result).toEqual([
+      {
+        filename: "src/example.js",
+        line: 11,
+        content: "newValue",
+      },
+    ]);
+  });
+
+  test("handles multiple diff hunks", () => {
+    const patch = `@@ -1,2 +1,3 @@
+ first
++addedNearTop
+ second
+@@ -20,2 +21,3 @@
+ later
++addedLater
+ end`;
+  });
 });
