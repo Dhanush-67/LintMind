@@ -52,5 +52,8 @@ describe("parsePatch", () => {
  later
 +addedLater
  end`;
+
+    const result = parsePatch("src/example.js", patch);
+    expect(result).toEqual([]);
   });
 });
