@@ -54,6 +54,17 @@ describe("parsePatch", () => {
  end`;
 
     const result = parsePatch("src/example.js", patch);
-    expect(result).toEqual([]);
+    expect(result).toEqual([
+      {
+        filename: "src/example.js",
+        line: 2,
+        content: "addedNearTop",
+      },
+      {
+        filename: "src/example.js",
+        line: 22,
+        content: "addedLater",
+      },
+    ]);
   });
 });
