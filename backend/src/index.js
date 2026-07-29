@@ -109,14 +109,6 @@ app.post(
       console.log("Generated comments:");
       console.dir(comments, { depth: null });
 
-      //       PR opened
-      // → webhook verified
-      // → changed code parsed
-      // → GitHub Models reviews code
-      // → output parsed and validated
-      // → findings stored in PostgreSQL
-      // → inline GitHub feedback posted
-
       const reviewRun = await saveReviewRun({
         repositoryFullName: payload.repository.full_name,
         pullRequestNumber: payload.pull_request.number,
