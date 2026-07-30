@@ -2,7 +2,17 @@ import crypto from "crypto";
 import request from "supertest";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const mock = vi.hoisted(() => {
+// Pretend webhook arrives
+//         ↓
+// reserveReviewRun() returns null
+//         ↓
+// Route recognizes a duplicate
+//         ↓
+// Returns HTTP 200
+//         ↓
+// No PR fetching, AI review, or GitHub posting
+
+const mocks = vi.hoisted(() => {
   process.env.GITHUB_WEBHOOK_SECRET = "test-secret";
 
   return {
@@ -68,3 +78,42 @@ function createSignature(body) {
     crypto.createHmac("sha256", "test-secret").update(body).digest("hex")
   );
 }
+
+describe("POST /api/github/webhook", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    mocks.reserveReviewRun.mockResolvedValue(null);
+    mocks.getInstallationOctokit.mockResolvedValue({});
+    mocks.getPullRequestFiles.mockResolvedValue([]);
+    mocks.reviewChunksWithAI.mockResolvedValue([]);
+
+    mocks.saveReviewRun.mockResolvedValue({
+      id: 1,
+      status: "COMPLETED",
+      commentCount: 0,
+      comments: [],
+    });
+
+    mocks.postPullRequestReview.mockResolvedValue(null);
+  });
+
+  test("returns 200 without processing a duplicate delivery", async () => {
+    const body = JSON.stringify(payload);
+
+    const response = await request(app)
+      .post("/api/github/webhook")
+      .set("Content-Type", "application/json")
+      .set("x-github-event", "pull_request")
+      .set("x-github-delivery", "duplicate-delivery-123")
+      .set("x-hub-signature-256", createSignature(body))
+      .send(body);
+
+    expect(response.status).toBe(200);
+    expect(response.text).toBe("Duplicate delivery ignored");
+
+    expect(mocks.getPullRequestFiles).not.toHaveBeenCalled();
+    expect(mocks.reviewChunksWithAI).not.toHaveBeenCalled();
+    expect(mocks.postPullRequestReview).not.toHaveBeenCalled();
+  });
+});
