@@ -19,7 +19,7 @@ model ReviewRun{
   pullRequestTitle String?
   pullRequestAuthor String?
   installationId Int
-  githubDeliveryId String?
+  githubDeliveryId String @unique
 
   status ReviewRunStatus @default(COMPLETED)
   commentCount Int @default(0)
@@ -42,6 +42,7 @@ model ReviewComment {
 }
 
 enum ReviewRunStatus {
+  PROCESSING
   COMPLETED
   FAILED
 }

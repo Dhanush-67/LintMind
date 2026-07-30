@@ -1,5 +1,14 @@
 import { prisma } from "../db/prisma.js";
 
+export async function reserveReviewRun(reviewData) {
+  return prisma.reviewRun.create({
+    data: {
+      ...reviewData,
+      status: "PROCESSING",
+    },
+  });
+}
+
 export async function saveReviewRun({
   repositoryFullName,
   pullRequestNumber,
