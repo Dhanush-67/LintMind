@@ -20,8 +20,9 @@ const mocks = vi.hoisted(() => {
     getPullRequestFiles: vi.fn(),
     reviewChunksWithAI: vi.fn(),
     reserveReviewRun: vi.fn(),
-    saveReviewRun: vi.fn(),
     postPullRequestReview: vi.fn(),
+    completeReviewRun: vi.fn(),
+    failReviewRun: vi.fn(),
   };
 });
 
@@ -39,7 +40,8 @@ vi.mock("./review/aiReviewEngine.js", () => ({
 
 vi.mock("./review/saveReviewRun.js", () => ({
   reserveReviewRun: mocks.reserveReviewRun,
-  saveReviewRun: mocks.saveReviewRun,
+  completeReviewRun: mocks.completeReviewRun,
+  failReviewRun: mocks.failReviewRun,
 }));
 
 vi.mock("./github/postReview.js", () => ({
@@ -87,10 +89,16 @@ describe("POST /api/github/webhook", () => {
     mocks.getInstallationOctokit.mockResolvedValue({});
     mocks.getPullRequestFiles.mockResolvedValue([]);
     mocks.reviewChunksWithAI.mockResolvedValue([]);
-
-    mocks.saveReviewRun.mockResolvedValue({
-      id: 1,
+    mocks.completeReviewRun.mockResolvedValue({
+      id: 42,
       status: "COMPLETED",
+      commentCount: 0,
+      comments: [],
+    });
+
+    mocks.failReviewRun.mockResolvedValue({
+      id: 42,
+      status: "FAILED",
       commentCount: 0,
       comments: [],
     });
@@ -115,5 +123,53 @@ describe("POST /api/github/webhook", () => {
     expect(mocks.getPullRequestFiles).not.toHaveBeenCalled();
     expect(mocks.reviewChunksWithAI).not.toHaveBeenCalled();
     expect(mocks.postPullRequestReview).not.toHaveBeenCalled();
+  });
+
+  test("marks a successfully processed delivery as completed", async () => {
+    mocks.reserveReviewRun.mockResolvedValue({
+      id: 42,
+      status: "PROCESSING",
+      commentCount: 0,
+      comments: [],
+    });
+
+    const body = JSON.stringify(payload);
+
+    const response = await request(app)
+      .post("/api/github/webhook")
+      .set("Content-Type", "application/json")
+      .set("x-github-event", "pull_request")
+      .set("x-github-delivery", "new-delivery-456")
+      .set("x-hub-signature-256", createSignature(body))
+      .send(body);
+
+    expect(response.status).toBe(200);
+
+    expect(mocks.completeReviewRun).toHaveBeenCalledWith(42, []);
+  });
+
+  test("marks a reserved derlivery as failed when processing throws", async () => {
+    mocks.reserveReviewRun.mockResolvedValue({
+      id: 42,
+      status: "PROCESSING",
+      commentCount: 0,
+      comments: [],
+    });
+
+    mocks.getPullRequestFiles.mockRejectedValue(new Error("GitHub API failed"));
+
+    const body = JSON.stringify(payload);
+
+    const response = await request(app)
+      .post("/api/github/webhook")
+      .set("Content-Type", "application/json")
+      .set("x-github-event", "pull_request")
+      .set("x-github-delivery", "failed-delivery-789")
+      .set("x-hub-signature-256", createSignature(body))
+      .send(body);
+
+    expect(response.status).toBe(500);
+    expect(mocks.failReviewRun).toHaveBeenCalledWith(42);
+    expect(mocks.completeReviewRun).not.toHaveBeenCalled();
   });
 });

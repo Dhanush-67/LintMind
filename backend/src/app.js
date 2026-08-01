@@ -5,7 +5,11 @@ import { getInstallationOctokit } from "./github/auth.js";
 import { parsePatch } from "./github/diffParser.js";
 import { getPullRequestFiles } from "./github/pull.js";
 import { reviewChunksWithAI } from "./review/aiReviewEngine.js";
-import { saveReviewRun } from "./review/saveReviewRun.js";
+import {
+  reserveReviewRun,
+  completeReviewRun,
+  failReviewRun,
+} from "./review/saveReviewRun.js";
 import { postPullRequestReview } from "./github/postReview.js";
 
 const app = express();
@@ -24,6 +28,7 @@ app.post(
   "/api/github/webhook",
   express.raw({ type: "application/json" }),
   async (req, res) => {
+    let reservedReviewRun = null;
     try {
       const signature = req.headers["x-hub-signature-256"];
       const event = req.headers["x-github-event"];
@@ -103,6 +108,20 @@ app.post(
         return res.status(200).send("Ignored pull_request action");
       }
 
+      reservedReviewRun = await reserveReviewRun({
+        repositoryFullName: payload.repository.full_name,
+        pullRequestNumber: payload.pull_request.number,
+        pullRequestTitle: payload.pull_request.title,
+        pullRequestAuthor: payload.pull_request.user.login,
+        installationId: payload.installation.id,
+        githubDeliveryId: delivery,
+      });
+
+      if (reservedReviewRun === null) {
+        console.log(`Duplicate delivery ignored: ${delivery}`);
+        return res.status(200).send("Duplicate delivery ignored");
+      }
+
       const files = await getPullRequestFiles(octokit, owner, repo, pullNumber);
 
       console.log(
@@ -139,20 +158,6 @@ app.post(
       console.log("Generated comments:");
       console.dir(comments, { depth: null });
 
-      const reviewRun = await saveReviewRun({
-        repositoryFullName: payload.repository.full_name,
-        pullRequestNumber: payload.pull_request.number,
-        pullRequestTitle: payload.pull_request.title,
-        pullRequestAuthor: payload.pull_request.user.login,
-        installationId: payload.installation.id,
-        githubDeliveryId: req.headers["x-github-delivery"],
-        comments,
-      });
-
-      console.log(
-        `Saved review run ${reviewRun.id} with ${reviewRun.commentCount} comments`,
-      );
-
       const githubReview = await postPullRequestReview(
         octokit,
         owner,
@@ -168,8 +173,26 @@ app.post(
         console.log("No review posted because no comments were generated");
       }
 
+      const completedReviewRun = await completeReviewRun(
+        reservedReviewRun.id,
+        comments,
+      );
+
+      console.log(
+        `Completed review run ${completedReviewRun.id} with ${completedReviewRun.commentCount} comments`,
+      );
+
       return res.status(200).send("Webhook received");
     } catch (error) {
+      //       reservedReviewRun initially null
+      // → reservation succeeds and stores run 42
+      // → getPullRequestFiles() throws
+      // → catch can access run 42
+      // → failReviewRun(42)
+      // → HTTP 500
+      if (reservedReviewRun !== null) {
+        await failReviewRun(reservedReviewRun.id);
+      }
       console.error("Webhook error:", error);
       return res.status(500).send("Internal server error");
     }
